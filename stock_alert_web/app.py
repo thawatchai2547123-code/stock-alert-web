@@ -5,12 +5,22 @@ from email.mime.text import MIMEText
 from apscheduler.schedulers.background import BackgroundScheduler
 import random
 import os
+import requests
 
 app = Flask(__name__)
 alerts_db = []
 
+# ================= การตั้งค่า Session ป้องกันการบล็อกราคาหุ้น =================
+session = requests.Session()
+session.headers.update({
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        " (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    )
+})
+# ==========================================================================
+
 # ================= การตั้งค่าอีเมลแบบปลอดภัย =================
-# ดึงค่าจากระบบปฏิบัติการ (Environment Variables)
 SENDER_EMAIL = os.getenv("SENDER_EMAIL", "thawatchai2547123@gmail.com")
 SENDER_PASSWORD = os.getenv("SENDER_PASSWORD", "vqjx fivg sgkd edyk")
 # ==========================================================
@@ -33,7 +43,7 @@ def check_stock_prices():
     for alert in alerts_db:
         if alert.get('alerted'): continue
         try:
-            stock = yf.Ticker(alert['symbol'])
+            stock = yf.Ticker(alert['symbol'], session=session)
             current_price = stock.history(period="1d")['Close'].iloc[-1]
             
             if alert['sell'] and current_price >= float(alert['sell']):
@@ -53,7 +63,7 @@ scheduler.start()
 def get_price():
     symbol = request.args.get('symbol', 'AAPL').upper().strip()
     try:
-        stock = yf.Ticker(symbol)
+        stock = yf.Ticker(symbol, session=session)
         try:
             price = round(float(stock.fast_info['lastPrice']), 2)
         except:
@@ -70,7 +80,7 @@ def index():
     
     news_data = []
     try:
-        stock = yf.Ticker(selected_symbol)
+        stock = yf.Ticker(selected_symbol, session=session)
         raw_news = stock.news[:3]
         for n in raw_news:
             news_data.append({'title': n.get('title', ''), 'link': n.get('link', '#'), 'publisher': n.get('publisher', '')})
@@ -98,7 +108,7 @@ def add_alert():
         return redirect(url_for('index', symbol=symbol, error="กรุณากำหนดราคาแนวรับหรือแนวต้านอย่างน้อย 1 ช่อง"))
 
     try:
-        stock = yf.Ticker(symbol)
+        stock = yf.Ticker(symbol, session=session)
         try:
             current_price = float(stock.fast_info['lastPrice'])
         except:
