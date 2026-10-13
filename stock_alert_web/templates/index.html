@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>Stock Alert Pro</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root { --primary: #1e60ff; --sidebar: #101928; --bg: #f5f7fa; --card: #ffffff; --text-main: #1f2937; --success: #10b981; --border: #e5e7eb; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body { background-color: var(--bg); display: flex; height: 100vh; overflow: hidden; }
+    
+        .sidebar { width: 250px; background-color: var(--sidebar); color: white; padding: 20px; }
+        .logo { font-size: 20px; font-weight: bold; margin-bottom: 40px; }
+        
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow-y: auto; padding: 20px 30px; }
+        .dashboard-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; }
+        .card { background: var(--card); border-radius: 12px; padding: 20px; border: 1px solid var(--border); margin-bottom: 20px; }
+        .card-title { font-size: 16px; font-weight: bold; margin-bottom: 15px; }
+        
+        input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; margin-top: 5px; margin-bottom: 15px; }
+        .btn-submit { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        
+        .ai-card { background: linear-gradient(135deg, #1e3a8a, #1e40af); color: white; }
+        .progress-bar { width: 100%; height: 8px; background: rgba(255,255,255,0.2); border-radius: 4px; display: flex; margin-bottom: 5px; }
+        
+        .news-item { border-bottom: 1px solid var(--border); padding: 10px 0; }
+        .news-item a { color: var(--primary); text-decoration: none; font-weight: bold; font-size: 14px; }
+        .news-publisher { font-size: 11px; color: gray; }
+
+        .alert-item { display: flex; justify-content: space-between; padding: 15px; border: 1px solid var(--border); border-left: 4px solid var(--success); margin-bottom: 10px; background: #fafafa; }
+        .alert-item.alerted { border-left-color: #9ca3af; background: #f3f4f6; opacity: 0.8; }
+        
+        .badge-status { font-size: 10px; padding: 2px 6px; border-radius: 10px; color: white; margin-left: 5px; font-weight: normal; }
+        .btn-view { background: #e0e7ff; color: var(--primary); padding: 5px 10px; border-radius: 4px; text-decoration: none; font-size: 12px; font-weight: bold; }
+        .btn-delete { background: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 5px;}
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="logo"><i class="fas fa-chart-line"></i> StockAlert</div>
+        <p style="color: #9ca3af; font-size: 14px;">หุ้นที่กำลังดู:<br> <b id="sidebarSymbol" style="color:white; font-size: 24px;">{{ selected }}</b></p>
+    </div>
+
+    <div class="main-content">
+        <h2 style="margin-bottom: 20px;">Stock Alert Dashboard</h2>
+
+        {% if error %}
+            <div style="background: #fee2e2; border: 1px solid #f87171; color: #991b1b; padding: 12px; border-radius: 6px; margin-bottom: 20px; font-size: 14px;">
+                <i class="fas fa-exclamation-circle"></i> {{ error }}
+            </div>
+        {% endif %}
+
+        <div class="dashboard-grid">
+            <!-- ฝั่งซ้าย: ฟอร์ม และ AI -->
+            <div>
+                <div class="card">
+                    <div class="card-title">สร้างการแจ้งเตือนใหม่</div>
+                    <form action="/add_alert" method="POST">
+                        <label>ชื่อหุ้น (Symbol)</label>
+                        <div style="display: flex; gap: 10px;">
+                            <!-- เมื่อพิมพ์หรือเลือกหุ้น ให้เปลี่ยนค่าทันที -->
+                            <input type="text" name="symbol" id="symbolInput" list="popular-stocks" required placeholder="พิมพ์ค้นหา หรือเลือกหุ้น..." value="{{ selected }}">
+                            <button type="button" onclick="loadStockData()" style="width: auto; padding: 10px; background: #6b7280; border-radius: 6px; color: white; border: none; cursor: pointer;">โหลดข้อมูล</button>
+                        </div>
+                        
+                        <datalist id="popular-stocks">
+                            <option value="AAPL">Apple Inc.</option>
+                            <option value="TSLA">Tesla Inc.</option>
+                            <option value="MSFT">Microsoft Corp.</option>
+                            <option value="NVDA">Nvidia</option>
+                            <option value="GOOGL">Alphabet (Google)</option>
+                            <option value="META">Meta (Facebook)</option>
+                            <option value="PTT.BK">ปตท. (หุ้นไทย)</option>
+                            <option value="AOT.BK">ท่าอากาศยานไทย (หุ้นไทย)</option>
+                            <option value="CPALL.BK">CPALL (หุ้นไทย)</option>
+                            <option value="BTC-USD">Bitcoin</option>
+                        </datalist>
+
+                        <p style="font-size: 14px; color: var(--primary); margin-bottom: 10px;">
+                            <b>ราคาปัจจุบัน: <span id="livePrice">กำลังโหลด...</span></b>
+                        </p>
+                        
+                        <label>อีเมล</label>
+                        <input type="email" name="user_email" required placeholder="email@gmail.com">
+                        
+                        <label>แนวรับ / ซื้อ <span style="font-size: 11px; color: gray;">(ต้องต่ำกว่าราคาปัจจุบัน)</span></label>
+                        <input type="number" step="0.01" name="target_buy" placeholder="ราคาต้องต่ำกว่าปัจจุบัน">
+                        
+                        <label>แนวต้าน / ขาย <span style="font-size: 11px; color: gray;">(ต้องสูงกว่าราคาปัจจุบัน)</span></label>
+                        <input type="number" step="0.01" name="target_sell" placeholder="ราคาต้องสูงกว่าปัจจุบัน">
+                        
+                        <button type="submit" class="btn-submit">เพิ่มการแจ้งเตือน</button>
+                    </form>
+                </div>
+
+                <div class="card ai-card">
+                    <div class="card-title" style="color: #93c5fd;">AI Analysis: <span id="aiSymbol">{{ selected }}</span></div>
+                    <h2 style="margin-bottom: 15px;" id="aiStatus">{{ ai.status }}</h2>
+                    <div class="progress-bar">
+                        <div id="aiBuyBar" style="background: #34d399; width: {{ ai.buy }}%;"></div>
+                        <div id="aiSellBar" style="background: #fb7185; width: {{ ai.sell }}%;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 12px;">
+                        <span id="aiBuyText">น้ำหนักซื้อ {{ ai.buy }}%</span>
+                        <span id="aiSellText">น้ำหนักขาย {{ ai.sell }}%</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ฝั่งขวา: กราฟ TradingView, ข่าว และรายการแจ้งเตือน -->
+            <div>
+                <div class="card" style="height: 350px; padding: 0; overflow: hidden;">
+                    <div class="tradingview-widget-container" style="height: 100%; width: 100%;">
+                        <div id="tradingview_chart" style="height: 100%; width: 100%;"></div>
+                        <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+                        <script type="text/javascript">
+                        let tvWidget = null;
+                        
+                        function initTradingView(symbol) {
+                            document.getElementById('tradingview_chart').innerHTML = "";
+                            tvWidget = new TradingView.widget({
+                                "autosize": true,
+                                "symbol": symbol,
+                                "interval": "D",
+                                "timezone": "Asia/Bangkok",
+                                "theme": "light",
+                                "style": "1",
+                                "locale": "th_TH",
+                                "enable_publishing": false,
+                                "hide_top_toolbar": true,
+                                "hide_legend": true,
+                                "save_image": false,
+                                "container_id": "tradingview_chart"
+                            });
+                        }
+                        // โหลดกราฟครั้งแรก
+                        initTradingView("{{ selected }}");
+                        </script>
+                    </div>
+                </div>
+
+                <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr;">
+                    <div class="card" style="max-height: 250px; overflow-y: auto;">
+                        <div class="card-title">ข่าวสารล่าสุด: <span id="newsSymbol">{{ selected }}</span></div>
+                        <div id="newsContainer">
+                            {% for n in news %}
+                                <div class="news-item">
+                                    <a href="{{ n.link }}" target="_blank">{{ n.title }}</a>
+                                    <div class="news-publisher">{{ n.publisher }}</div>
+                                </div>
+                            {% else %}
+                                <p style="font-size: 13px; color: gray;">ไม่มีข่าวใหม่สำหรับหุ้นนี้</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="card" style="max-height: 250px; overflow-y: auto;">
+                        <div class="card-title">รายการแจ้งเตือนของคุณ</div>
+                        {% for alert in alerts %}
+                            <div class="alert-item {% if alert.alerted %}alerted{% endif %}">
+                                <div>
+                                    <b>{{ alert.symbol }}</b>
+                                    {% if alert.alerted %}
+                                        <span class="badge-status" style="background: #9ca3af;">แจ้งเตือนแล้ว</span>
+                                    {% else %}
+                                        <span class="badge-status" style="background: #10b981;">กำลังเฝ้าดู</span>
+                                    {% endif %}
+                                    <br>
+                                    <span style="font-size: 11px; color: gray;">รับ: {{ alert.buy or '-' }} | ต้าน: {{ alert.sell or '-' }}</span>
+                                </div>
+                                <div style="display: flex; align-items: center;">
+                                    <a href="/?symbol={{ alert.symbol }}" class="btn-view">ดูกราฟ</a>
+                                    <form action="/delete/{{ loop.index0 }}" method="POST" style="margin: 0;">
+                                        <button type="submit" class="btn-delete"><i class="fas fa-trash"></i></button>
+                                    </form>
+                                </div>
+                            </div>
+                        {% else %}
+                            <p style="font-size: 13px; color: gray;">ยังไม่มีการแจ้งเตือน</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script สำหรับอัปเดตราคา กราฟ และข้อมูลแบบเรียลไทม์ทันทีที่เปลี่ยนชื่อหุ้น -->
+    <script>
+        const symbolInput = document.getElementById('symbolInput');
+        let currentSymbol = "{{ selected }}";
+
+        function fetchLivePrice(sym) {
+            fetch('/get_price?symbol=' + sym)
+                .then(response => response.json())
+                .then(data => {
+                    const priceElement = document.getElementById('livePrice');
+                    if (data.price > 0) {
+                        priceElement.innerText = data.price.toLocaleString();
+                    } else {
+                        priceElement.innerText = "ไม่พบราคา";
+                    }
+                })
+                .catch(() => {
+                    document.getElementById('livePrice').innerText = "โหลดไม่สำเร็จ";
+                });
+        }
+
+        function loadStockData() {
+            let sym = symbolInput.value.trim().toUpperCase();
+            if (!sym) return;
+            
+            currentSymbol = sym;
+            document.getElementById('sidebarSymbol').innerText = sym;
+            document.getElementById('aiSymbol').innerText = sym;
+            document.getElementById('newsSymbol').innerText = sym;
+
+            // ดึงราคาปัจจุบันใหม่ทันที
+            fetchLivePrice(sym);
+
+            // อัปเดตกราฟ TradingView ทันทีโดยไม่ต้องรีเฟรชหน้าเว็บ
+            initTradingView(sym);
+        }
+
+        // เมื่อผู้ใช้พิมพ์เปลี่ยนชื่อหุ้นหรือเลือกจาก datalist ให้โหลดข้อมูลใหม่ทันที
+        symbolInput.addEventListener('change', loadStockData);
+        symbolInput.addEventListener('input', function() {
+            let sym = symbolInput.value.trim().toUpperCase();
+            if (sym.length >= 2) {
+                // อัปเดตกราฟและราคาอัตโนมัติเมื่อพิมพ์ครบตัวอักษร
+                currentSymbol = sym;
+                fetchLivePrice(sym);
+                if (typeof initTradingView === 'function') {
+                    initTradingView(sym);
+                }
+            }
+        });
+
+        // โหลดราคาเริ่มต้นตอนเปิดหน้าเว็บ
+        fetchLivePrice(currentSymbol);
+        
+        // วิ่งดึงราคาอัปเดตทุกๆ 5 วินาที
+        setInterval(() => {
+            fetchLivePrice(currentSymbol);
+        }, 5000);
+    </script>
+</body>
+</html>
