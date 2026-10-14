@@ -2,14 +2,12 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <!-- โค้ดบรรทัดนี้สำคัญมาก! ช่วยให้หน้าเว็บปรับขนาดตามจอมือถืออัตโนมัติ -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
     <title>Stock Alert</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-50 flex flex-col md:flex-row min-h-screen">
 
-    <!-- แถบเมนูด้านซ้าย (Sidebar) -->
     <div class="w-full md:w-64 bg-gray-900 text-white flex flex-col">
         <div class="p-6 text-xl font-bold flex items-center gap-2">
             📈 StockAlert
@@ -20,7 +18,6 @@
         </div>
     </div>
 
-    <!-- พื้นที่เนื้อหาหลัก (Main Content) -->
     <div class="flex-1 p-4 md:p-8">
         <h1 class="text-2xl font-bold mb-6">Stock Alert Dashboard</h1>
 
@@ -30,12 +27,9 @@
         </div>
         {% endif %}
 
-        <!-- การจัด Layout แบบใหม่: ในมือถือเป็น 1 คอลัมน์ แถวเรียงลงมา / ในคอมแยกเป็น 3 ส่วน -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-            <!-- คอลัมน์ซ้าย (ฟอร์มกรอกข้อมูล) -->
             <div class="col-span-1 space-y-6">
-                <!-- กล่องฟอร์ม -->
                 <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                     <h3 class="font-bold mb-4 text-lg">สร้างการแจ้งเตือนใหม่</h3>
                     <form action="/add_alert" method="POST" class="space-y-4">
@@ -50,9 +44,15 @@
                             {% endif %}
                         </div>
                         
+                        <!-- ช่องอีเมล + ปุ่มทดสอบส่ง -->
                         <div>
                             <label class="block text-sm font-semibold text-gray-700 mb-1">อีเมลผู้รับแจ้งเตือน</label>
-                            <input type="email" name="user_email" placeholder="ใส่อีเมล Gmail ของคุณ" class="w-full border rounded p-2" required>
+                            <div class="flex gap-2">
+                                <input type="email" id="input_test_email" name="user_email" placeholder="ใส่อีเมล Gmail ของคุณ" class="w-full border rounded p-2" required>
+                                <button type="button" onclick="testSendEmail()" class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600 font-bold whitespace-nowrap transition-colors shadow-sm" title="กดเพื่อทดสอบว่าส่งอีเมลได้จริงหรือไม่">
+                                    ทดสอบ
+                                </button>
+                            </div>
                         </div>
 
                         <div>
@@ -69,7 +69,6 @@
                     </form>
                 </div>
 
-                <!-- กล่อง AI Analysis (จะแสดงก็ต่อเมื่อเลือกหุ้นแล้ว) -->
                 {% if selected and ai %}
                 <div class="bg-blue-900 text-white p-6 rounded-lg shadow-md">
                     <h3 class="font-bold mb-2 text-blue-200">AI Analysis: {{ selected }}</h3>
@@ -86,13 +85,8 @@
                 {% endif %}
             </div>
 
-            <!-- คอลัมน์ขวา (กราฟและข้อมูลข่าว) -->
             <div class="col-span-1 lg:col-span-2 space-y-6">
-                
-                <!-- กล่องกราฟ TradingView -->
                 <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200 min-h-[400px] flex items-center justify-center">
-                    
-                    <!-- เช็คเงื่อนไข: ถ้าเลือกหุ้นแล้วถึงจะโหลดกราฟ -->
                     {% if selected %}
                     <div class="tradingview-widget-container w-full h-[450px]">
                       <div id="tradingview_{{ selected }}"></div>
@@ -116,8 +110,6 @@
                       });
                       </script>
                     </div>
-                    
-                    <!-- ถ้ายังไม่เลือกหุ้น ให้แสดงหน้าจอว่างๆ แทนกราฟ -->
                     {% else %}
                     <div class="text-center text-gray-400 py-20">
                         <svg class="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -129,9 +121,7 @@
                     {% endif %}
                 </div>
 
-                <!-- แถวข้อมูลด้านล่าง (ข่าว & รายการแจ้งเตือน) -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- กล่องข่าว -->
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                         <h3 class="font-bold mb-4 text-gray-800">ข่าวสารล่าสุด: {{ selected if selected else '-' }}</h3>
                         {% if selected and news %}
@@ -148,7 +138,6 @@
                         {% endif %}
                     </div>
 
-                    <!-- กล่องรายการแจ้งเตือน -->
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                         <h3 class="font-bold mb-4 text-gray-800">รายการแจ้งเตือนของคุณ</h3>
                         {% if alerts %}
@@ -191,7 +180,6 @@
     </div>
 
     {% if selected %}
-    <!-- Script ดึงราคาหุ้นแบบไม่ให้หน้ากระตุก -->
     <script>
         fetch('/get_price?symbol={{ selected }}')
             .then(response => response.json())
@@ -209,5 +197,37 @@
             });
     </script>
     {% endif %}
+
+    <!-- Script สำหรับปุ่มทดสอบส่งอีเมล -->
+    <script>
+    function testSendEmail() {
+        const email = document.getElementById('input_test_email').value;
+        if (!email) {
+            alert('⚠️ กรุณากรอกอีเมลในช่องก่อนกดทดสอบครับ');
+            return;
+        }
+        
+        alert('⏳ กำลังทดสอบส่งอีเมล... กรุณารอสักครู่ (อาจใช้เวลา 3-5 วินาที)');
+        
+        const formData = new FormData();
+        formData.append('test_email', email);
+        
+        fetch('/test_email', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert('✅ ' + data.message);
+            } else {
+                alert('❌ ' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('❌ เกิดข้อผิดพลาด ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้');
+        });
+    }
+    </script>
 </body>
 </html>
