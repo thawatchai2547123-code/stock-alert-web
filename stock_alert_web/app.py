@@ -21,7 +21,7 @@ session.headers.update({
 
 # ================= การตั้งค่าอีเมล =================
 SENDER_EMAIL = os.getenv("SENDER_EMAIL", "thawatchai2547123@gmail.com")
-SENDER_PASSWORD = os.getenv("SENDER_PASSWORD", "vqjx fivg sgkd edyk")
+SENDER_PASSWORD = os.getenv("SENDER_PASSWORD", "vqjxfivgsgkdedyk")
 
 def get_live_price(symbol):
     if not symbol: return 0.0
