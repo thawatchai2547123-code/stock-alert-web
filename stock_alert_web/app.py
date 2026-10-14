@@ -6,26 +6,37 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import random
 import os
 import requests
+import json
 
 app = Flask(__name__)
-alerts_db = []
+DB_FILE = 'alerts_db.json'
 
-# ================= การตั้งค่า Session =================
-session = requests.Session()
-session.headers.update({
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        " (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-    )
-})
+# ================= 1. แก้ปัญหาความจำแยกส่วนบน Render ด้วย JSON =================
+def load_alerts():
+    if not os.path.exists(DB_FILE):
+        return []
+    try:
+        with open(DB_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except:
+        return []
 
-# ================= การตั้งค่าอีเมล =================
+def save_alerts(alerts):
+    with open(DB_FILE, 'w', encoding='utf-8') as f:
+        json.dump(alerts, f, ensure_ascii=False, indent=4)
+
+# ================= 2. การตั้งค่าอีเมล =================
+# ใช้รหัสผ่านที่คุณรันผ่านบน Localhost เป็นค่าเริ่มต้นเพื่อกันพลาด
 SENDER_EMAIL = os.getenv("SENDER_EMAIL", "thawatchai2547123@gmail.com").strip()
-# ลบช่องว่างใน App Password ออกอัตโนมัติป้องกันล็อกอินล้มเหลว
 SENDER_PASSWORD = os.getenv("SENDER_PASSWORD", "vqjx fivg sgkd edyk").replace(" ", "").strip()
 
 def get_live_price(symbol):
     if not symbol: return 0.0
+    # สร้าง Session ใหม่ทุกครั้ง เพื่อป้องกัน Thread ค้างบนเซิร์ฟเวอร์คลาวด์
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0 Safari/537.36"
+    })
     try:
         stock = yf.Ticker(symbol, session=session)
         try:
@@ -49,50 +60,56 @@ def get_live_price(symbol):
 
 def send_email(to_email, subject, body):
     try:
+        print(f"📧 กำลังเตรียมส่งอีเมลไปยัง {to_email}...")
         msg = MIMEText(body)
         msg['Subject'] = subject
         msg['From'] = SENDER_EMAIL
         msg['To'] = to_email
+        
         server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.set_debuglevel(1)  # เปิด Log เชิงลึก เผื่อ Render บล็อก
         server.starttls()
         server.login(SENDER_EMAIL, SENDER_PASSWORD)
         server.sendmail(SENDER_EMAIL, to_email, msg.as_string())
         server.quit()
-        print(f"✅ ส่งอีเมลแจ้งเตือนไปยัง {to_email} สำเร็จ!")
+        print(f"✅ ส่งอีเมลแจ้งเตือนสำเร็จ!")
         return True
     except Exception as e:
-        print(f"❌ ส่งอีเมลไม่สำเร็จ ({to_email}): {e}")
+        print(f"❌ ส่งอีเมลล้มเหลว: {e}")
         return False
 
 def check_stock_prices():
-    if not alerts_db:
+    alerts = load_alerts()
+    if not alerts:
         return
-    print(f"🔄 กำลังตรวจสอบราคาหุ้น... รายการเฝ้าดูทั้งหมด: {len(alerts_db)} รายการ")
-    for alert in alerts_db:
+        
+    updated = False
+    print(f"🔄 บอทกำลังตรวจราคา... (มี {len(alerts)} รายการเฝ้าดู)")
+    
+    for alert in alerts:
         if alert.get('alerted'): 
             continue
-        try:
-            current_price = get_live_price(alert['symbol'])
-            if current_price <= 0: continue
             
-            print(f"📊 เช็คหุ้น {alert['symbol']}: ปัจจุบัน = {current_price} | เป้าซื้อ = {alert['buy']} | เป้าขาย = {alert['sell']}")
+        current_price = get_live_price(alert['symbol'])
+        if current_price <= 0: continue
+        
+        # เช็คเป้าขาย (ขึ้นไปถึงเป้า)
+        if alert['sell'] is not None and current_price >= float(alert['sell']):
+            print(f"🚀 {alert['symbol']} ถึงเป้าขาย! กำลังส่งอีเมล...")
+            if send_email(alert['email'], f"📈 หุ้น {alert['symbol']} ถึงเป้าขายแล้ว!", f"ราคาหุ้น {alert['symbol']} ขึ้นมาถึงเป้าหมาย {alert['sell']} (ราคาปัจจุบัน {current_price})"):
+                alert['alerted'] = True
+                updated = True
 
-            # เช็คเป้าขาย (แนวต้าน)
-            if alert['sell'] is not None and current_price >= float(alert['sell']):
-                print(f"🚀 หุ้น {alert['symbol']} ถึงเป้าขาย! (ปัจจุบัน {current_price} >= {alert['sell']}) กำลังส่งเมล...")
-                sent = send_email(alert['email'], f"📈 แจ้งเตือน: {alert['symbol']} ถึงเป้าขาย!", f"ราคาหุ้น {alert['symbol']} ถึงเป้าหมาย {alert['sell']} แล้ว (ราคาปัจจุบัน: {current_price})")
-                if sent:
-                    alert['alerted'] = True
+        # เช็คเป้าซื้อ (ลงมาถึงเป้า)
+        elif alert['buy'] is not None and current_price <= float(alert['buy']):
+            print(f"📉 {alert['symbol']} ถึงเป้าซื้อ! กำลังส่งอีเมล...")
+            if send_email(alert['email'], f"📉 หุ้น {alert['symbol']} ถึงเป้าซื้อแล้ว!", f"ราคาหุ้น {alert['symbol']} ลงมาถึงเป้าหมาย {alert['buy']} (ราคาปัจจุบัน {current_price})"):
+                alert['alerted'] = True
+                updated = True
 
-            # เช็คเป้าซื้อ (แนวรับ)
-            elif alert['buy'] is not None and current_price <= float(alert['buy']):
-                print(f"📉 หุ้น {alert['symbol']} ถึงเป้าซื้อ! (ปัจจุบัน {current_price} <= {alert['buy']}) กำลังส่งเมล...")
-                sent = send_email(alert['email'], f"📉 แจ้งเตือน: {alert['symbol']} ถึงเป้าซื้อ!", f"ราคาหุ้น {alert['symbol']} ลงมาถึงเป้าหมาย {alert['buy']} แล้ว (ราคาปัจจุบัน: {current_price})")
-                if sent:
-                    alert['alerted'] = True
-
-        except Exception as e:
-            print(f"⚠️ เช็คราคาผิดพลาด ({alert['symbol']}): {e}")
+    # อัปเดตสถานะการแจ้งเตือนลงไฟล์ ป้องกันการส่งซ้ำ
+    if updated:
+        save_alerts(alerts)
 
 scheduler = BackgroundScheduler()
 scheduler.add_job(func=check_stock_prices, trigger="interval", minutes=1)
@@ -101,20 +118,18 @@ scheduler.start()
 @app.route('/get_price')
 def get_price():
     symbol = request.args.get('symbol', '').upper().strip()
-    # ตรวจสอบเงื่อนไขราคาหุ้นทันทีเมื่อมีการดึงราคา
-    check_stock_prices()
     if not symbol: return jsonify({'price': 0})
     price = get_live_price(symbol)
     return jsonify({'price': price})
 
 @app.route('/ping')
 def ping():
-    # บังคับรันเช็คราคาหุ้นทันทีเมื่อ UptimeRobot ทักเข้ามา
     check_stock_prices()
     return "OK", 200
 
 @app.route('/')
 def index():
+    alerts = load_alerts()
     selected_symbol = request.args.get('symbol', '').upper().strip()
     error_msg = request.args.get('error')
     
@@ -123,6 +138,8 @@ def index():
 
     if selected_symbol:
         try:
+            session = requests.Session()
+            session.headers.update({"User-Agent": "Mozilla/5.0"})
             stock = yf.Ticker(selected_symbol, session=session)
             raw_news = stock.news[:3]
             for n in raw_news:
@@ -138,7 +155,7 @@ def index():
             'status': 'สะสม (Accumulate)' if buy_pct >= 50 else 'ชะลอลงทุน (Wait)'
         }
 
-    return render_template('index.html', alerts=alerts_db, selected=selected_symbol, news=news_data, ai=ai_data, error=error_msg)
+    return render_template('index.html', alerts=alerts, selected=selected_symbol, news=news_data, ai=ai_data, error=error_msg)
 
 @app.route('/add_alert', methods=['POST'])
 def add_alert():
@@ -149,40 +166,39 @@ def add_alert():
 
     if not symbol:
         return redirect(url_for('index', error="กรุณาระบุชื่อหุ้น"))
-
     if not target_buy_str and not target_sell_str:
-        return redirect(url_for('index', symbol=symbol, error="กรุณากำหนดราคาแนวรับหรือแนวต้านอย่างน้อย 1 ช่อง"))
+        return redirect(url_for('index', symbol=symbol, error="กรุณากำหนดราคาอย่างน้อย 1 ช่อง"))
 
     current_price = get_live_price(symbol)
     if current_price <= 0:
-        return redirect(url_for('index', symbol=symbol, error=f"ไม่สามารถดึงราคาปัจจุบันของหุ้น '{symbol}' ได้ในขณะนี้"))
+        return redirect(url_for('index', symbol=symbol, error=f"ไม่สามารถดึงราคาปัจจุบันได้"))
 
     target_buy = float(target_buy_str) if target_buy_str else None
     target_sell = float(target_sell_str) if target_sell_str else None
 
-    if target_buy is not None and target_buy >= current_price:
-        return redirect(url_for('index', symbol=symbol, error=f"ราคาแนวรับ ({target_buy}) ต้องต่ำกว่าราคาปัจจุบัน ({current_price:.2f})"))
+    # ปิดตัวเช็คเงื่อนไขย้อนแย้งเพื่อให้คุณทดสอบได้ง่ายขึ้นเวลาใส่ราคาเป้าหมาย
 
-    if target_sell is not None and target_sell <= current_price:
-        return redirect(url_for('index', symbol=symbol, error=f"ราคาแนวต้าน ({target_sell}) ต้องสูงกว่าราคาปัจจุบัน ({current_price:.2f})"))
-
-    alerts_db.append({
+    alerts = load_alerts()
+    alerts.append({
         'symbol': symbol,
         'email': user_email,
         'buy': target_buy,
         'sell': target_sell,
         'alerted': False
     })
+    save_alerts(alerts)
     
-    # หลังเพิ่มรายการใหม่ สั่งเช็คราคาทันที
+    # สั่งให้บอทเช็คราคาทันทีหลังกดเพิ่ม
     check_stock_prices()
     
     return redirect(f"/?symbol={symbol}")
 
 @app.route('/delete/<int:index>', methods=['POST'])
 def delete_index(index):
-    if 0 <= index < len(alerts_db):
-        alerts_db.pop(index)
+    alerts = load_alerts()
+    if 0 <= index < len(alerts):
+        alerts.pop(index)
+        save_alerts(alerts)
     return redirect('/')
 
 if __name__ == '__main__':
