@@ -20,8 +20,9 @@ session.headers.update({
 })
 
 # ================= การตั้งค่าอีเมล =================
-SENDER_EMAIL = os.getenv("SENDER_EMAIL", "thawatchai2547123@gmail.com")
-SENDER_PASSWORD = os.getenv("SENDER_PASSWORD", "vqjxfivgsgkdedyk")
+SENDER_EMAIL = os.getenv("SENDER_EMAIL", "thawatchai2547123@gmail.com").strip()
+# ลบช่องว่างใน App Password ออกอัตโนมัติป้องกันล็อกอินล้มเหลว
+SENDER_PASSWORD = os.getenv("SENDER_PASSWORD", "vqjx fivg sgkd edyk").replace(" ", "").strip()
 
 def get_live_price(symbol):
     if not symbol: return 0.0
@@ -58,25 +59,38 @@ def send_email(to_email, subject, body):
         server.sendmail(SENDER_EMAIL, to_email, msg.as_string())
         server.quit()
         print(f"✅ ส่งอีเมลแจ้งเตือนไปยัง {to_email} สำเร็จ!")
+        return True
     except Exception as e:
-        print(f"❌ ส่งอีเมลไม่สำเร็จ: {e}")
+        print(f"❌ ส่งอีเมลไม่สำเร็จ ({to_email}): {e}")
+        return False
 
 def check_stock_prices():
     if not alerts_db:
-        return # ถ้าไม่มีหุ้นให้ข้ามไป เพื่อไม่ให้เปลืองทรัพยากร
-    print(f"🔄 กำลังเช็คราคาหุ้นเบื้องหลัง... (รายการทั้งหมด: {len(alerts_db)})")
+        return
+    print(f"🔄 กำลังตรวจสอบราคาหุ้น... รายการเฝ้าดูทั้งหมด: {len(alerts_db)} รายการ")
     for alert in alerts_db:
-        if alert.get('alerted'): continue
+        if alert.get('alerted'): 
+            continue
         try:
             current_price = get_live_price(alert['symbol'])
             if current_price <= 0: continue
             
-            if alert['sell'] and current_price >= float(alert['sell']):
-                send_email(alert['email'], f"📈 แจ้งเตือน: {alert['symbol']} ถึงเป้าขาย!", f"ราคาถึง {alert['sell']} แล้ว (ปัจจุบัน: {current_price})")
-                alert['alerted'] = True
-            elif alert['buy'] and current_price <= float(alert['buy']):
-                send_email(alert['email'], f"📉 แจ้งเตือน: {alert['symbol']} ถึงเป้าซื้อ!", f"ราคาลงมาถึง {alert['buy']} แล้ว (ปัจจุบัน: {current_price})")
-                alert['alerted'] = True
+            print(f"📊 เช็คหุ้น {alert['symbol']}: ปัจจุบัน = {current_price} | เป้าซื้อ = {alert['buy']} | เป้าขาย = {alert['sell']}")
+
+            # เช็คเป้าขาย (แนวต้าน)
+            if alert['sell'] is not None and current_price >= float(alert['sell']):
+                print(f"🚀 หุ้น {alert['symbol']} ถึงเป้าขาย! (ปัจจุบัน {current_price} >= {alert['sell']}) กำลังส่งเมล...")
+                sent = send_email(alert['email'], f"📈 แจ้งเตือน: {alert['symbol']} ถึงเป้าขาย!", f"ราคาหุ้น {alert['symbol']} ถึงเป้าหมาย {alert['sell']} แล้ว (ราคาปัจจุบัน: {current_price})")
+                if sent:
+                    alert['alerted'] = True
+
+            # เช็คเป้าซื้อ (แนวรับ)
+            elif alert['buy'] is not None and current_price <= float(alert['buy']):
+                print(f"📉 หุ้น {alert['symbol']} ถึงเป้าซื้อ! (ปัจจุบัน {current_price} <= {alert['buy']}) กำลังส่งเมล...")
+                sent = send_email(alert['email'], f"📉 แจ้งเตือน: {alert['symbol']} ถึงเป้าซื้อ!", f"ราคาหุ้น {alert['symbol']} ลงมาถึงเป้าหมาย {alert['buy']} แล้ว (ราคาปัจจุบัน: {current_price})")
+                if sent:
+                    alert['alerted'] = True
+
         except Exception as e:
             print(f"⚠️ เช็คราคาผิดพลาด ({alert['symbol']}): {e}")
 
@@ -87,18 +101,20 @@ scheduler.start()
 @app.route('/get_price')
 def get_price():
     symbol = request.args.get('symbol', '').upper().strip()
+    # ตรวจสอบเงื่อนไขราคาหุ้นทันทีเมื่อมีการดึงราคา
+    check_stock_prices()
     if not symbol: return jsonify({'price': 0})
     price = get_live_price(symbol)
     return jsonify({'price': price})
 
-# เพิ่ม Endpoint นี้สำหรับใช้ทำระบบรัน 24 ชม. ในขั้นตอนที่ 3
 @app.route('/ping')
 def ping():
+    # บังคับรันเช็คราคาหุ้นทันทีเมื่อ UptimeRobot ทักเข้ามา
+    check_stock_prices()
     return "OK", 200
 
 @app.route('/')
 def index():
-    # ลบ AAPL ออก เปลี่ยนเป็นรอรับค่าว่าง
     selected_symbol = request.args.get('symbol', '').upper().strip()
     error_msg = request.args.get('error')
     
@@ -157,6 +173,10 @@ def add_alert():
         'sell': target_sell,
         'alerted': False
     })
+    
+    # หลังเพิ่มรายการใหม่ สั่งเช็คราคาทันที
+    check_stock_prices()
+    
     return redirect(f"/?symbol={symbol}")
 
 @app.route('/delete/<int:index>', methods=['POST'])
