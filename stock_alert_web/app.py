@@ -27,7 +27,6 @@ def save_alerts(alerts):
 
 # ================= 2. การตั้งค่าอีเมล =================
 SENDER_EMAIL = os.getenv("SENDER_EMAIL", "thawatchai2547123@gmail.com").strip()
-# ลบช่องว่างอัตโนมัติ ป้องกัน Error ตอนล็อกอิน
 SENDER_PASSWORD = os.getenv("SENDER_PASSWORD", "vqjx fivg sgkd edyk").replace(" ", "").strip()
 
 def get_live_price(symbol):
@@ -65,9 +64,9 @@ def send_email(to_email, subject, body):
         msg['From'] = SENDER_EMAIL
         msg['To'] = to_email
         
-        server = smtplib.SMTP('smtp.gmail.com', 587)
+        # ใช้ SMTP_SSL พอร์ต 465 และตั้ง Timeout กันเซิร์ฟเวอร์ค้าง
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10)
         server.set_debuglevel(1)  # เปิด Log เชิงลึกให้ Render
-        server.starttls()
         server.login(SENDER_EMAIL, SENDER_PASSWORD)
         server.sendmail(SENDER_EMAIL, to_email, msg.as_string())
         server.quit()
@@ -204,7 +203,7 @@ def test_email_route():
     if success:
         return jsonify({'status': 'success', 'message': f'ส่งอีเมลทดสอบสำเร็จ! โปรดเช็คกล่องจดหมายของคุณ'})
     else:
-        return jsonify({'status': 'error', 'message': 'ส่งอีเมลล้มเหลว! รหัสผ่านแอปอาจไม่ถูกต้อง โปรดเช็ค Log ของ Render'})
+        return jsonify({'status': 'error', 'message': 'ส่งอีเมลล้มเหลว! โปรดเช็ค Log ของ Render สำหรับรายละเอียด'})
 
 if __name__ == '__main__':
     app.run(debug=True, use_reloader=False)
