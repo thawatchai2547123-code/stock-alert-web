@@ -11,7 +11,7 @@ import json
 app = Flask(__name__)
 DB_FILE = 'alerts_db.json'
 
-# ================= 1. แก้ปัญหาความจำแยกส่วนบน Render ด้วย JSON =================
+# ================= 1. ระบบจัดการฐานข้อมูล (Database) =================
 def load_alerts():
     if not os.path.exists(DB_FILE):
         return []
@@ -26,16 +26,15 @@ def save_alerts(alerts):
         json.dump(alerts, f, ensure_ascii=False, indent=4)
 
 # ================= 2. การตั้งค่าอีเมล =================
-# ใช้รหัสผ่านที่คุณรันผ่านบน Localhost เป็นค่าเริ่มต้นเพื่อกันพลาด
 SENDER_EMAIL = os.getenv("SENDER_EMAIL", "thawatchai2547123@gmail.com").strip()
+# ลบช่องว่างอัตโนมัติ ป้องกัน Error ตอนล็อกอิน
 SENDER_PASSWORD = os.getenv("SENDER_PASSWORD", "vqjx fivg sgkd edyk").replace(" ", "").strip()
 
 def get_live_price(symbol):
     if not symbol: return 0.0
-    # สร้าง Session ใหม่ทุกครั้ง เพื่อป้องกัน Thread ค้างบนเซิร์ฟเวอร์คลาวด์
     session = requests.Session()
     session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
     })
     try:
         stock = yf.Ticker(symbol, session=session)
@@ -67,7 +66,7 @@ def send_email(to_email, subject, body):
         msg['To'] = to_email
         
         server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.set_debuglevel(1)  # เปิด Log เชิงลึก เผื่อ Render บล็อก
+        server.set_debuglevel(1)  # เปิด Log เชิงลึกให้ Render
         server.starttls()
         server.login(SENDER_EMAIL, SENDER_PASSWORD)
         server.sendmail(SENDER_EMAIL, to_email, msg.as_string())
@@ -80,8 +79,7 @@ def send_email(to_email, subject, body):
 
 def check_stock_prices():
     alerts = load_alerts()
-    if not alerts:
-        return
+    if not alerts: return
         
     updated = False
     print(f"🔄 บอทกำลังตรวจราคา... (มี {len(alerts)} รายการเฝ้าดู)")
@@ -93,21 +91,20 @@ def check_stock_prices():
         current_price = get_live_price(alert['symbol'])
         if current_price <= 0: continue
         
-        # เช็คเป้าขาย (ขึ้นไปถึงเป้า)
+        # เช็คเป้าขาย (แนวต้าน)
         if alert['sell'] is not None and current_price >= float(alert['sell']):
             print(f"🚀 {alert['symbol']} ถึงเป้าขาย! กำลังส่งอีเมล...")
             if send_email(alert['email'], f"📈 หุ้น {alert['symbol']} ถึงเป้าขายแล้ว!", f"ราคาหุ้น {alert['symbol']} ขึ้นมาถึงเป้าหมาย {alert['sell']} (ราคาปัจจุบัน {current_price})"):
                 alert['alerted'] = True
                 updated = True
 
-        # เช็คเป้าซื้อ (ลงมาถึงเป้า)
+        # เช็คเป้าซื้อ (แนวรับ)
         elif alert['buy'] is not None and current_price <= float(alert['buy']):
             print(f"📉 {alert['symbol']} ถึงเป้าซื้อ! กำลังส่งอีเมล...")
             if send_email(alert['email'], f"📉 หุ้น {alert['symbol']} ถึงเป้าซื้อแล้ว!", f"ราคาหุ้น {alert['symbol']} ลงมาถึงเป้าหมาย {alert['buy']} (ราคาปัจจุบัน {current_price})"):
                 alert['alerted'] = True
                 updated = True
 
-    # อัปเดตสถานะการแจ้งเตือนลงไฟล์ ป้องกันการส่งซ้ำ
     if updated:
         save_alerts(alerts)
 
@@ -144,8 +141,7 @@ def index():
             raw_news = stock.news[:3]
             for n in raw_news:
                 news_data.append({'title': n.get('title', ''), 'link': n.get('link', '#'), 'publisher': n.get('publisher', '')})
-        except:
-            pass
+        except: pass
 
         random.seed(selected_symbol) 
         buy_pct = random.randint(20, 80)
@@ -164,19 +160,14 @@ def add_alert():
     target_buy_str = request.form.get('target_buy', '').strip()
     target_sell_str = request.form.get('target_sell', '').strip()
 
-    if not symbol:
-        return redirect(url_for('index', error="กรุณาระบุชื่อหุ้น"))
-    if not target_buy_str and not target_sell_str:
-        return redirect(url_for('index', symbol=symbol, error="กรุณากำหนดราคาอย่างน้อย 1 ช่อง"))
+    if not symbol: return redirect(url_for('index', error="กรุณาระบุชื่อหุ้น"))
+    if not target_buy_str and not target_sell_str: return redirect(url_for('index', symbol=symbol, error="กรุณากำหนดราคาอย่างน้อย 1 ช่อง"))
 
     current_price = get_live_price(symbol)
-    if current_price <= 0:
-        return redirect(url_for('index', symbol=symbol, error=f"ไม่สามารถดึงราคาปัจจุบันได้"))
+    if current_price <= 0: return redirect(url_for('index', symbol=symbol, error=f"ไม่สามารถดึงราคาปัจจุบันได้"))
 
     target_buy = float(target_buy_str) if target_buy_str else None
     target_sell = float(target_sell_str) if target_sell_str else None
-
-    # ปิดตัวเช็คเงื่อนไขย้อนแย้งเพื่อให้คุณทดสอบได้ง่ายขึ้นเวลาใส่ราคาเป้าหมาย
 
     alerts = load_alerts()
     alerts.append({
@@ -188,7 +179,6 @@ def add_alert():
     })
     save_alerts(alerts)
     
-    # สั่งให้บอทเช็คราคาทันทีหลังกดเพิ่ม
     check_stock_prices()
     
     return redirect(f"/?symbol={symbol}")
@@ -200,6 +190,21 @@ def delete_index(index):
         alerts.pop(index)
         save_alerts(alerts)
     return redirect('/')
+
+# ================= ฟังก์ชันทดสอบปุ่มส่งอีเมล =================
+@app.route('/test_email', methods=['POST'])
+def test_email_route():
+    test_email = request.form.get('test_email', '').strip()
+    if not test_email:
+        return jsonify({'status': 'error', 'message': 'กรุณากรอกอีเมลก่อนกดทดสอบ'})
+    
+    print(f"🛠️ เริ่มการทดสอบส่งอีเมลไปยัง: {test_email}")
+    success = send_email(test_email, "🛠️ ทดสอบระบบแจ้งเตือน Stock Alert", "สวัสดี! นี่คืออีเมลทดสอบจากระบบ Stock Alert ของคุณ หากคุณได้รับอีเมลฉบับนี้ แสดงว่าระบบสามารถส่งอีเมลจากเซิร์ฟเวอร์ Render ได้ตามปกติครับ 🎉")
+    
+    if success:
+        return jsonify({'status': 'success', 'message': f'ส่งอีเมลทดสอบสำเร็จ! โปรดเช็คกล่องจดหมายของคุณ'})
+    else:
+        return jsonify({'status': 'error', 'message': 'ส่งอีเมลล้มเหลว! รหัสผ่านแอปอาจไม่ถูกต้อง โปรดเช็ค Log ของ Render'})
 
 if __name__ == '__main__':
     app.run(debug=True, use_reloader=False)
