@@ -10,7 +10,6 @@ app = Flask(__name__)
 DB_FILE = 'alerts_db.json'
 
 # ================= 1. ตั้งค่า URL ของ Google Apps Script =================
-# วาง URL ที่ได้จากการ Deploy Google Apps Script ไว้ในเครื่องหมายคำพูดนี้
 APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvOdsnzgzG26xGegG_g9BpONWh5bKgdeKVdjaREcTtwgQHayMiQ-PkoP7OwsqO_USr/exec"
 
 def load_alerts():
@@ -53,7 +52,7 @@ def get_live_price(symbol):
         print(f"❌ ดึงราคา {symbol} ไม่สำเร็จ: {e}")
     return 0.0
 
-# ================= 2. ฟังก์ชันส่งเมลผ่าน Google Apps Script (ไม่ติดบล็อก Render) =================
+# ================= 2. ฟังก์ชันส่งเมลพร้อมปรับข้อความให้สวยงาม =================
 def send_email(to_email, subject, body):
     try:
         print(f"📧 กำลังส่งคำขอให้ Google Apps Script ส่งเมลไปยัง {to_email}...")
@@ -91,15 +90,20 @@ def check_stock_prices():
         current_price = get_live_price(alert['symbol'])
         if current_price <= 0: continue
         
+        # ปรับข้อความแจ้งเตือนให้สวยงามและอ่านง่าย
         if alert['sell'] is not None and current_price >= float(alert['sell']):
             print(f"🚀 {alert['symbol']} ถึงเป้าขาย! กำลังส่งอีเมล...")
-            if send_email(alert['email'], f"📈 หุ้น {alert['symbol']} ถึงเป้าขายแล้ว!", f"ราคาหุ้น {alert['symbol']} ขึ้นมาถึงเป้าหมาย {alert['sell']} (ราคาปัจจุบัน {current_price})"):
+            subject = f"[แจ้งเตือน] หุ้น {alert['symbol']} ถึงราคาเป้าหมาย (ขาย)"
+            body = f"เรียน คุณผู้ใช้งาน,\n\nหุ้น {alert['symbol']} ได้ปรับตัวขึ้นมาถึงราคาเป้าหมายที่คุณตั้งไว้ที่ {alert['sell']} บาทเรียบร้อยแล้ว\n(ราคาซื้อขายล่าสุด: {current_price} บาท)\n\nจากระบบ Stock Alert Bot"
+            if send_email(alert['email'], subject, body):
                 alert['alerted'] = True
                 updated = True
 
         elif alert['buy'] is not None and current_price <= float(alert['buy']):
             print(f"📉 {alert['symbol']} ถึงเป้าซื้อ! กำลังส่งอีเมล...")
-            if send_email(alert['email'], f"📉 หุ้น {alert['symbol']} ถึงเป้าซื้อแล้ว!", f"ราคาหุ้น {alert['symbol']} ลงมาถึงเป้าหมาย {alert['buy']} (ราคาปัจจุบัน {current_price})"):
+            subject = f"[แจ้งเตือน] หุ้น {alert['symbol']} ถึงราคาเป้าหมาย (ซื้อ)"
+            body = f"เรียน คุณผู้ใช้งาน,\n\nหุ้น {alert['symbol']} ได้ปรับตัวลดลงมาถึงราคาเป้าหมายที่คุณตั้งไว้ที่ {alert['buy']} บาทเรียบร้อยแล้ว\n(ราคาซื้อขายล่าสุด: {current_price} บาท)\n\nจากระบบ Stock Alert Bot"
+            if send_email(alert['email'], subject, body):
                 alert['alerted'] = True
                 updated = True
 
@@ -195,11 +199,14 @@ def test_email_route():
     if not test_email:
         return jsonify({'status': 'error', 'message': 'กรุณากรอกอีเมลก่อนกดทดสอบ'})
     
-    print(f"🛠️ เริ่มการทดสอบส่งอีเมลผ่าน Apps Script ไปยัง: {test_email}")
-    success = send_email(test_email, "🛠️ ทดสอบระบบแจ้งเตือน Stock Alert", "สวัสดี! นี่คืออีเมลทดสอบผ่าน Google Apps Script สำเร็จเรียบร้อยดีครับ 🎉")
+    print(f"🛠️ เริ่มการทดสอบส่งอีเมลไปยัง: {test_email}")
+    subject = "[ทดสอบระบบ] Stock Alert Bot พร้อมใช้งาน"
+    body = "สวัสดีครับ,\n\nนี่คืออีเมลทดสอบจากระบบแจ้งเตือนราคาหุ้น Stock Alert Bot ระบบเชื่อมต่อและพร้อมใช้งานตลอด 24 ชั่วโมงเรียบร้อยแล้วครับ"
+    
+    success = send_email(test_email, subject, body)
     
     if success:
-        return jsonify({'status': 'success', 'message': f'ส่งอีเมลทดสอบสำเร็จ! เช็คกล่องจดหมายของคุณได้เลย'})
+        return jsonify({'status': 'success', 'message': 'ส่งอีเมลทดสอบสำเร็จ! ตรวจสอบกล่องข้อความของคุณได้เลย'})
     else:
         return jsonify({'status': 'error', 'message': 'ส่งล้มเหลว! โปรดเช็ค Log ของ Render'})
 
