@@ -1,7 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 import yfinance as yf
-import smtplib
-from email.mime.text import MIMEText
 from apscheduler.schedulers.background import BackgroundScheduler
 import random
 import os
@@ -11,7 +9,10 @@ import json
 app = Flask(__name__)
 DB_FILE = 'alerts_db.json'
 
-# ================= 1. ระบบจัดการฐานข้อมูล (Database) =================
+# ================= 1. ตั้งค่า URL ของ Google Apps Script =================
+# วาง URL ที่ได้จากการ Deploy Google Apps Script ไว้ในเครื่องหมายคำพูดนี้
+APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvOdsnzgzG26xGegG_g9BpONWh5bKgdeKVdjaREcTtwgQHayMiQ-PkoP7OwsqO_USr/exec"
+
 def load_alerts():
     if not os.path.exists(DB_FILE):
         return []
@@ -24,10 +25,6 @@ def load_alerts():
 def save_alerts(alerts):
     with open(DB_FILE, 'w', encoding='utf-8') as f:
         json.dump(alerts, f, ensure_ascii=False, indent=4)
-
-# ================= 2. การตั้งค่าอีเมล =================
-SENDER_EMAIL = os.getenv("SENDER_EMAIL", "thawatchai2547123@gmail.com").strip()
-SENDER_PASSWORD = os.getenv("SENDER_PASSWORD", "vqjx fivg sgkd edyk").replace(" ", "").strip()
 
 def get_live_price(symbol):
     if not symbol: return 0.0
@@ -56,24 +53,28 @@ def get_live_price(symbol):
         print(f"❌ ดึงราคา {symbol} ไม่สำเร็จ: {e}")
     return 0.0
 
+# ================= 2. ฟังก์ชันส่งเมลผ่าน Google Apps Script (ไม่ติดบล็อก Render) =================
 def send_email(to_email, subject, body):
     try:
-        print(f"📧 กำลังเตรียมส่งอีเมลไปยัง {to_email}...")
-        msg = MIMEText(body)
-        msg['Subject'] = subject
-        msg['From'] = SENDER_EMAIL
-        msg['To'] = to_email
+        print(f"📧 กำลังส่งคำขอให้ Google Apps Script ส่งเมลไปยัง {to_email}...")
+        payload = {
+            "email": to_email,
+            "subject": subject,
+            "body": body
+        }
+        headers = {"Content-Type": "application/json"}
         
-        # ใช้ SMTP_SSL พอร์ต 465 และตั้ง Timeout กันเซิร์ฟเวอร์ค้าง
-        server = smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10)
-        server.set_debuglevel(1)  # เปิด Log เชิงลึกให้ Render
-        server.login(SENDER_EMAIL, SENDER_PASSWORD)
-        server.sendmail(SENDER_EMAIL, to_email, msg.as_string())
-        server.quit()
-        print(f"✅ ส่งอีเมลแจ้งเตือนสำเร็จ!")
-        return True
+        response = requests.post(APPS_SCRIPT_URL, data=json.dumps(payload), headers=headers, timeout=15)
+        result = response.json()
+        
+        if result.get("status") == "success":
+            print(f"✅ ส่งอีเมลผ่าน Apps Script สำเร็จ!")
+            return True
+        else:
+            print(f"❌ Apps Script แจ้งข้อผิดพลาด: {result.get('message')}")
+            return False
     except Exception as e:
-        print(f"❌ ส่งอีเมลล้มเหลว: {e}")
+        print(f"❌ เชื่อมต่อ Apps Script ล้มเหลว: {e}")
         return False
 
 def check_stock_prices():
@@ -90,14 +91,12 @@ def check_stock_prices():
         current_price = get_live_price(alert['symbol'])
         if current_price <= 0: continue
         
-        # เช็คเป้าขาย (แนวต้าน)
         if alert['sell'] is not None and current_price >= float(alert['sell']):
             print(f"🚀 {alert['symbol']} ถึงเป้าขาย! กำลังส่งอีเมล...")
             if send_email(alert['email'], f"📈 หุ้น {alert['symbol']} ถึงเป้าขายแล้ว!", f"ราคาหุ้น {alert['symbol']} ขึ้นมาถึงเป้าหมาย {alert['sell']} (ราคาปัจจุบัน {current_price})"):
                 alert['alerted'] = True
                 updated = True
 
-        # เช็คเป้าซื้อ (แนวรับ)
         elif alert['buy'] is not None and current_price <= float(alert['buy']):
             print(f"📉 {alert['symbol']} ถึงเป้าซื้อ! กำลังส่งอีเมล...")
             if send_email(alert['email'], f"📉 หุ้น {alert['symbol']} ถึงเป้าซื้อแล้ว!", f"ราคาหุ้น {alert['symbol']} ลงมาถึงเป้าหมาย {alert['buy']} (ราคาปัจจุบัน {current_price})"):
@@ -190,20 +189,19 @@ def delete_index(index):
         save_alerts(alerts)
     return redirect('/')
 
-# ================= ฟังก์ชันทดสอบปุ่มส่งอีเมล =================
 @app.route('/test_email', methods=['POST'])
 def test_email_route():
     test_email = request.form.get('test_email', '').strip()
     if not test_email:
         return jsonify({'status': 'error', 'message': 'กรุณากรอกอีเมลก่อนกดทดสอบ'})
     
-    print(f"🛠️ เริ่มการทดสอบส่งอีเมลไปยัง: {test_email}")
-    success = send_email(test_email, "🛠️ ทดสอบระบบแจ้งเตือน Stock Alert", "สวัสดี! นี่คืออีเมลทดสอบจากระบบ Stock Alert ของคุณ หากคุณได้รับอีเมลฉบับนี้ แสดงว่าระบบสามารถส่งอีเมลจากเซิร์ฟเวอร์ Render ได้ตามปกติครับ 🎉")
+    print(f"🛠️ เริ่มการทดสอบส่งอีเมลผ่าน Apps Script ไปยัง: {test_email}")
+    success = send_email(test_email, "🛠️ ทดสอบระบบแจ้งเตือน Stock Alert", "สวัสดี! นี่คืออีเมลทดสอบผ่าน Google Apps Script สำเร็จเรียบร้อยดีครับ 🎉")
     
     if success:
-        return jsonify({'status': 'success', 'message': f'ส่งอีเมลทดสอบสำเร็จ! โปรดเช็คกล่องจดหมายของคุณ'})
+        return jsonify({'status': 'success', 'message': f'ส่งอีเมลทดสอบสำเร็จ! เช็คกล่องจดหมายของคุณได้เลย'})
     else:
-        return jsonify({'status': 'error', 'message': 'ส่งอีเมลล้มเหลว! โปรดเช็ค Log ของ Render สำหรับรายละเอียด'})
+        return jsonify({'status': 'error', 'message': 'ส่งล้มเหลว! โปรดเช็ค Log ของ Render'})
 
 if __name__ == '__main__':
     app.run(debug=True, use_reloader=False)
