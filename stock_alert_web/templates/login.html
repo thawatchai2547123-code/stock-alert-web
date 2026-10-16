@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
+    <title>เข้าสู่ระบบ - Stock Alert Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+    <div class="bg-slate-800 p-8 rounded-2xl shadow-2xl border border-slate-700 w-full max-w-md">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-cyan-400 flex items-center justify-center gap-2">
+                📈 StockAlert
+            </h1>
+            <p class="text-slate-400 mt-2">เข้าสู่ระบบเพื่อจัดการแจ้งเตือนส่วนตัว</p>
+        </div>
+        <form action="/login" method="POST" class="space-y-6">
+            <div>
+                <label class="block text-sm font-semibold text-slate-300 mb-2">อีเมล Gmail ของคุณ</label>
+                <input type="email" name="email" placeholder="example@gmail.com" class="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white focus:border-cyan-400 focus:outline-none transition-colors" required>
+            </div>
+            <button type="submit" class="w-full bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-3 rounded-lg transition-colors shadow-[0_0_15px_rgba(6,182,212,0.4)]">
+                เข้าสู่ระบบ / เริ่มต้นใช้งาน
+            </button>
+        </form>
+    </div>
+</body>
+</html>
