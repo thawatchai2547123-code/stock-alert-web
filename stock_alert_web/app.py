@@ -5,6 +5,7 @@ import random
 import os
 import requests
 import json
+import xml.etree.ElementTree as ET  # เพิ่มสำหรับอ่านข่าว RSS
 
 app = Flask(__name__)
 # ตั้งค่า Secret Key สำหรับใช้งาน Session (Login)
@@ -15,13 +16,10 @@ DB_FILE = 'alerts_db.json'
 APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvOdsnzgzG26xGegG_g9BpONWh5bKgdeKVdjaREcTtwgQHayMiQ-PkoP7OwsqO_USr/exec"
 
 def load_alerts():
-    if not os.path.exists(DB_FILE):
-        return []
+    if not os.path.exists(DB_FILE): return []
     try:
-        with open(DB_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except:
-        return []
+        with open(DB_FILE, 'r', encoding='utf-8') as f: return json.load(f)
+    except: return []
 
 def save_alerts(alerts):
     with open(DB_FILE, 'w', encoding='utf-8') as f:
@@ -36,12 +34,6 @@ def get_live_price(symbol):
         try:
             val = stock.fast_info.get('lastPrice')
             if val and float(val) > 0: return round(float(val), 2)
-        except: pass
-        try:
-            df = stock.history(period="1d", session=sess)
-            if not df.empty:
-                val = df['Close'].iloc[-1]
-                if val and float(val) > 0: return round(float(val), 2)
         except: pass
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d"
         res = sess.get(url, timeout=5)
@@ -58,17 +50,13 @@ def send_email(to_email, subject, body):
         headers = {"Content-Type": "application/json"}
         response = requests.post(APPS_SCRIPT_URL, data=json.dumps(payload), headers=headers, timeout=15)
         result = response.json()
-        if result.get("status") == "success":
-            return True
-        return False
-    except Exception:
-        return False
+        return result.get("status") == "success"
+    except Exception: return False
 
 def check_stock_prices():
     alerts = load_alerts()
     if not alerts: return
     updated = False
-    
     for alert in alerts:
         if alert.get('alerted'): continue
         current_price = get_live_price(alert['symbol'])
@@ -94,7 +82,6 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(func=check_stock_prices, trigger="interval", minutes=1)
 scheduler.start()
 
-# ================= ระบบ Login / Logout =================
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -121,15 +108,10 @@ def ping():
 
 @app.route('/')
 def index():
-    # บังคับ Login
-    if 'user_email' not in session:
-        return redirect(url_for('login'))
-    
+    if 'user_email' not in session: return redirect(url_for('login'))
     user_email = session['user_email']
     all_alerts = load_alerts()
-    # ดึงเฉพาะแจ้งเตือนของ User คนนี้
     user_alerts = [a for a in all_alerts if a['email'] == user_email]
-    
     selected_symbol = request.args.get('symbol', '').upper().strip()
     error_msg = request.args.get('error')
     
@@ -137,13 +119,21 @@ def index():
     ai_data = None
 
     if selected_symbol:
+        # ================= แก้ปัญหาระบบข่าวว่างเปล่าโดยใช้ RSS ของ Yahoo =================
         try:
-            sess = requests.Session()
-            sess.headers.update({"User-Agent": "Mozilla/5.0"})
-            stock = yf.Ticker(selected_symbol, session=sess)
-            for n in stock.news[:3]:
-                news_data.append({'title': n.get('title', ''), 'link': n.get('link', '#'), 'publisher': n.get('publisher', '')})
-        except: pass
+            rss_url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={selected_symbol}&region=US&lang=en-US"
+            resp = requests.get(rss_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
+            if resp.status_code == 200:
+                root = ET.fromstring(resp.text)
+                for item in root.findall('./channel/item')[:4]:  # ดึงมา 4 ข่าว
+                    title = item.find('title').text
+                    link = item.find('link').text
+                    pub_date = item.find('pubDate').text
+                    # ตัดเอาแค่วันที่และเวลาให้ดูสั้นลง
+                    news_data.append({'title': title, 'link': link, 'publisher': pub_date[:22] if pub_date else 'Yahoo Finance'})
+        except Exception as e:
+            print(f"❌ โหลดข่าวไม่สำเร็จ: {e}")
+
         random.seed(selected_symbol) 
         buy_pct = random.randint(20, 80)
         ai_data = {'buy': buy_pct, 'sell': 100 - buy_pct, 'status': 'สะสม (Accumulate)' if buy_pct >= 50 else 'ชะลอลงทุน (Wait)'}
@@ -153,14 +143,12 @@ def index():
 @app.route('/add_alert', methods=['POST'])
 def add_alert():
     if 'user_email' not in session: return redirect(url_for('login'))
-    
     symbol = request.form['symbol'].upper().strip()
-    user_email = session['user_email'] # ดึงจากระบบ ไม่ต้องให้กรอก
+    user_email = session['user_email']
     target_buy_str = request.form.get('target_buy', '').strip()
     target_sell_str = request.form.get('target_sell', '').strip()
 
     if not symbol: return redirect(url_for('index', error="กรุณาระบุชื่อหุ้น"))
-    
     target_buy = float(target_buy_str) if target_buy_str else None
     target_sell = float(target_sell_str) if target_sell_str else None
 
@@ -174,12 +162,10 @@ def add_alert():
 def delete_alert(symbol, buy, sell):
     if 'user_email' not in session: return redirect(url_for('login'))
     user_email = session['user_email']
-    
     alerts = load_alerts()
     buy_val = float(buy) if buy != 'None' else None
     sell_val = float(sell) if sell != 'None' else None
     
-    # ลบเฉพาะรายการของตัวเองที่ตรงกับข้อมูล
     for i, a in enumerate(alerts):
         if a['email'] == user_email and a['symbol'] == symbol and a['buy'] == buy_val and a['sell'] == sell_val:
             alerts.pop(i)
@@ -190,15 +176,10 @@ def delete_alert(symbol, buy, sell):
 
 @app.route('/test_email', methods=['POST'])
 def test_email_route():
-    if 'user_email' not in session:
-        return jsonify({'status': 'error', 'message': 'กรุณาเข้าสู่ระบบ'})
-    
-    test_email = session['user_email']
-    success = send_email(test_email, "[ทดสอบระบบ] Stock Alert", "การแจ้งเตือนทำงานปกติครับ!")
-    if success:
-        return jsonify({'status': 'success', 'message': 'ส่งสำเร็จ! ตรวจสอบกล่องข้อความของคุณ'})
-    else:
-        return jsonify({'status': 'error', 'message': 'ส่งล้มเหลว! โปรดเช็ค Google Apps Script'})
+    if 'user_email' not in session: return jsonify({'status': 'error', 'message': 'กรุณาเข้าสู่ระบบ'})
+    success = send_email(session['user_email'], "[ทดสอบระบบ] Stock Alert", "การแจ้งเตือนทำงานปกติครับ!")
+    if success: return jsonify({'status': 'success', 'message': 'ส่งสำเร็จ! ตรวจสอบกล่องข้อความของคุณ'})
+    else: return jsonify({'status': 'error', 'message': 'ส่งล้มเหลว! โปรดเช็ค Google Apps Script'})
 
 if __name__ == '__main__':
     app.run(debug=True, use_reloader=False)
