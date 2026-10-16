@@ -12,7 +12,7 @@ app.secret_key = 'stock_alert_pro_secret_key_neon'
 DB_FILE = 'alerts_db.json'
 
 # ================= 1. ตั้งค่า URL ของ Google Apps Script =================
-APPS_SCRIPT_URL = "script.google.com/macros/s/AKfycbwvOdsnzgzG26xGegG_g9BpONWh5bKgdeKVdjaREcTtwgQHayMiQ-PkoP7OwsqO_USr/exec"
+APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvOdsnzgzG26xGegG_g9BpONWh5bKgdeKVdjaREcTtwgQHayMiQ-PkoP7OwsqO_USr/exec"
 
 def load_alerts():
     if not os.path.exists(DB_FILE):
