@@ -4,101 +4,114 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
     <title>Stock Alert Dashboard</title>
+    <!-- โหลด Tailwind CSS + ตั้งค่า Dark Mode -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+      }
+    </script>
     <style>
-        /* สไตล์ Neon สำหรับ Dark Theme */
-        body { background-color: #0f172a; color: #f8fafc; }
-        .card { background-color: #1e293b; border: 1px solid #334155; border-radius: 1rem; }
-        .input-neon { background-color: #0f172a; border: 1px solid #334155; color: white; transition: all 0.3s; }
-        .input-neon:focus { border-color: #06b6d4; outline: none; box-shadow: 0 0 10px rgba(6,182,212,0.2); }
-        .btn-neon { background-color: #06b6d4; color: white; transition: all 0.3s; }
-        .btn-neon:hover { background-color: #0891b2; box-shadow: 0 0 15px rgba(6,182,212,0.5); }
         /* สกอร์บาร์แบบซ่อน */
         ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #0f172a; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .dark ::-webkit-scrollbar-thumb { background: #334155; }
+        /* การปรับสมูท */
+        html { scroll-behavior: smooth; }
     </style>
 </head>
-<body class="flex flex-col md:flex-row min-h-screen">
+<body class="flex flex-col md:flex-row min-h-screen bg-slate-50 dark:bg-[#0f172a] text-slate-900 dark:text-slate-100 transition-colors duration-300">
 
-    <!-- Sidebar -->
-    <div class="w-full md:w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between">
+    <!-- แถบเมนูด้านซ้าย (Sidebar) -->
+    <div class="w-full md:w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col justify-between transition-colors duration-300 shadow-lg md:shadow-none">
         <div>
-            <div class="p-6 text-2xl font-bold text-cyan-400 flex items-center gap-2 border-b border-slate-800">
+            <div class="p-6 text-2xl font-bold text-cyan-600 dark:text-cyan-400 flex items-center gap-2 border-b border-slate-200 dark:border-slate-800">
                 📈 StockAlert
             </div>
-            <nav class="p-4 space-y-2 text-slate-300 font-medium">
-                <a href="#" class="block px-4 py-3 rounded-lg bg-cyan-900/30 text-cyan-400">🏠 หน้าหลัก</a>
-                <a href="#" class="block px-4 py-3 rounded-lg hover:bg-slate-800 transition">🔔 แจ้งเตือน</a>
-                <a href="#" class="block px-4 py-3 rounded-lg hover:bg-slate-800 transition">⚙️ ตั้งค่า</a>
+            <!-- เมนูที่ใช้งานได้จริง -->
+            <nav class="p-4 space-y-2 text-slate-600 dark:text-slate-300 font-medium">
+                <a href="/" class="block px-4 py-3 rounded-lg bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400 transition-colors">
+                    🏠 หน้าหลัก / ค้นหาหุ้น
+                </a>
+                <a href="#alerts-section" class="block px-4 py-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                    🔔 รายการแจ้งเตือน
+                </a>
+                <a href="#news-section" class="block px-4 py-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                    📰 ข่าวสารล่าสุด
+                </a>
+                
+                <hr class="border-slate-200 dark:border-slate-700 my-4">
+                
+                <!-- ปุ่มสลับธีม สว่าง/มืด -->
+                <button onclick="toggleTheme()" class="w-full text-left flex items-center gap-2 px-4 py-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                    <span id="theme-icon">🌙</span> <span id="theme-text">เปิดโหมดมืด (Dark)</span>
+                </button>
             </nav>
         </div>
-        <div class="p-6 border-t border-slate-800 flex items-center justify-between">
+        <div class="p-6 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
             <div class="text-sm">
-                <p class="text-slate-400">ผู้ใช้งาน:</p>
-                <p class="text-cyan-400 font-bold truncate w-32" title="{{ user_email }}">{{ user_email }}</p>
+                <p class="text-slate-500 dark:text-slate-400">ผู้ใช้งาน:</p>
+                <p class="text-cyan-600 dark:text-cyan-400 font-bold truncate w-32" title="{{ user_email }}">{{ user_email }}</p>
             </div>
-            <a href="/logout" class="text-red-400 hover:text-red-300 text-sm font-bold bg-red-900/20 px-3 py-1 rounded">ออก</a>
+            <a href="/logout" class="text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 px-3 py-1 rounded transition-colors text-sm font-bold border border-red-200 dark:border-red-900/50">
+                ออก
+            </a>
         </div>
     </div>
 
-    <!-- Main Content -->
+    <!-- พื้นที่เนื้อหาหลัก -->
     <div class="flex-1 p-4 md:p-6 overflow-x-hidden">
-        <!-- Header -->
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
-                <h1 class="text-3xl font-bold">Stock Alert <span class="text-cyan-400">Dashboard</span></h1>
-                <p class="text-slate-400 text-sm mt-1">วิเคราะห์ราคา แจ้งเตือนก่อนใคร เพื่อการลงทุนที่ดีกว่า</p>
+                <h1 class="text-3xl font-bold">Stock Alert <span class="text-cyan-600 dark:text-cyan-400">Dashboard</span></h1>
+                <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">วิเคราะห์ราคา แจ้งเตือนก่อนใคร เพื่อการลงทุนที่ดีกว่า</p>
             </div>
-            <div class="flex items-center gap-3 bg-emerald-500/10 text-emerald-400 px-4 py-2 rounded-full border border-emerald-500/20 font-medium text-sm">
-                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <div class="flex items-center gap-3 bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-4 py-2 rounded-full border border-emerald-300 dark:border-emerald-500/20 font-medium text-sm">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse"></span>
                 ระบบเฝ้าดูทำงาน 24 ชม.
             </div>
         </div>
 
         {% if error %}
-        <div class="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded-lg mb-6">
+        <div class="bg-red-100 dark:bg-red-900/50 border border-red-400 dark:border-red-500 text-red-700 dark:text-red-200 px-4 py-3 rounded-lg mb-6">
             {{ error }}
         </div>
         {% endif %}
 
-        <!-- Grid Layout -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-            <!-- ฝั่งซ้าย (ฟอร์ม + AI) -->
+            <!-- ฝั่งซ้าย (ฟอร์ม) -->
             <div class="lg:col-span-4 space-y-6">
-                <!-- Form Add Alert -->
-                <div class="card p-6">
-                    <h3 class="font-bold text-lg mb-4 text-cyan-400 flex items-center gap-2">
+                <!-- กล่องฟอร์ม -->
+                <div class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700 p-6 rounded-2xl shadow-sm transition-colors duration-300">
+                    <h3 class="font-bold text-lg mb-4 text-cyan-600 dark:text-cyan-400 flex items-center gap-2">
                         🔔 สร้างการแจ้งเตือนใหม่
                     </h3>
                     <form action="/add_alert" method="POST" class="space-y-5">
                         
-                        <!-- ช่องพิมพ์ชื่อหุ้น -->
                         <div>
-                            <label class="block text-sm font-medium text-slate-300 mb-1">ชื่อหุ้น (Symbol)</label>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">ชื่อหุ้น (Symbol)</label>
                             <div class="flex gap-2">
-                                <input type="text" name="symbol" value="{{ selected }}" placeholder="เช่น AMD, AAPL" class="w-full input-neon rounded-lg p-3 uppercase" required>
-                                <button type="button" onclick="window.location.href='/?symbol=' + this.previousElementSibling.value" class="bg-slate-700 hover:bg-slate-600 text-white px-4 rounded-lg transition-colors border border-slate-600">
+                                <input type="text" name="symbol" value="{{ selected }}" placeholder="เช่น AMD, AAPL" class="w-full bg-slate-50 dark:bg-[#0f172a] border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg p-3 uppercase focus:outline-none focus:border-cyan-500 transition-colors" required>
+                                <button type="button" onclick="window.location.href='/?symbol=' + this.previousElementSibling.value" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-white px-4 rounded-lg transition-colors border border-slate-300 dark:border-slate-600">
                                     โหลด
                                 </button>
                             </div>
                         </div>
 
-                        <!-- ป้ายราคาปัจจุบัน (แสดงเมื่อเลือกหุ้นแล้ว) -->
                         {% if selected %}
-                        <div class="bg-emerald-900/30 border border-emerald-500/30 rounded-lg p-3 flex justify-between items-center">
-                            <span class="text-emerald-400 text-sm">ราคาปัจจุบัน</span>
-                            <span class="text-emerald-400 font-bold text-xl" id="current_price_display">⏳...</span>
+                        <div class="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-500/30 rounded-lg p-3 flex justify-between items-center transition-colors">
+                            <span class="text-emerald-700 dark:text-emerald-400 text-sm">ราคาปัจจุบัน</span>
+                            <span class="text-emerald-700 dark:text-emerald-400 font-bold text-xl" id="current_price_display">⏳...</span>
                         </div>
                         {% endif %}
                         
-                        <!-- อีเมล และ ปุ่มทดสอบ (เชื่อมกับ Session) -->
                         <div>
-                            <label class="block text-sm font-medium text-slate-300 mb-1">ส่งแจ้งเตือนไปที่ (อีเมลของคุณ)</label>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">ส่งแจ้งเตือนไปที่</label>
                             <div class="flex gap-2">
-                                <input type="text" value="{{ user_email }}" class="w-full bg-slate-900 border border-slate-700 text-slate-400 rounded-lg p-3 cursor-not-allowed" disabled>
-                                <button type="button" onclick="testSendEmail()" class="bg-indigo-500 hover:bg-indigo-600 text-white px-4 rounded-lg transition-colors shadow-lg font-medium whitespace-nowrap">
+                                <input type="text" value="{{ user_email }}" class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 rounded-lg p-3 cursor-not-allowed" disabled>
+                                <button type="button" onclick="testSendEmail()" class="bg-indigo-500 hover:bg-indigo-600 text-white px-4 rounded-lg transition-colors shadow-md font-medium whitespace-nowrap">
                                     ทดสอบ
                                 </button>
                             </div>
@@ -106,126 +119,108 @@
 
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-1">แนวรับ (ซื้อ)</label>
-                                <input type="number" step="0.01" name="target_buy" placeholder="ราคาต่ำกว่าปัจจุบัน" class="w-full input-neon rounded-lg p-3">
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">แนวรับ (ซื้อ)</label>
+                                <input type="number" step="0.01" name="target_buy" placeholder="ราคาต่ำกว่าปัจจุบัน" class="w-full bg-slate-50 dark:bg-[#0f172a] border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg p-3 focus:outline-none focus:border-cyan-500 transition-colors">
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-1">แนวต้าน (ขาย)</label>
-                                <input type="number" step="0.01" name="target_sell" placeholder="ราคาสูงกว่าปัจจุบัน" class="w-full input-neon rounded-lg p-3">
+                                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">แนวต้าน (ขาย)</label>
+                                <input type="number" step="0.01" name="target_sell" placeholder="ราคาสูงกว่าปัจจุบัน" class="w-full bg-slate-50 dark:bg-[#0f172a] border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg p-3 focus:outline-none focus:border-cyan-500 transition-colors">
                             </div>
                         </div>
 
-                        <button type="submit" class="w-full btn-neon font-bold py-3 rounded-lg shadow-lg text-lg">เพิ่มการแจ้งเตือน</button>
+                        <button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-700 dark:bg-cyan-500 dark:hover:bg-cyan-600 text-white font-bold py-3 rounded-lg shadow-md transition-colors text-lg">เพิ่มการแจ้งเตือน</button>
                     </form>
                 </div>
 
                 <!-- AI Analysis -->
                 {% if selected and ai %}
-                <div class="card p-6 border-l-4 border-l-cyan-400">
-                    <h3 class="font-bold text-cyan-400 mb-2 flex items-center gap-2">🤖 AI Analysis: {{ selected }}</h3>
-                    <h2 class="text-3xl font-bold text-white mb-4">{{ ai.status }}</h2>
-                    <div class="w-full bg-slate-900 rounded-full h-4 mb-2 flex overflow-hidden border border-slate-700">
+                <div class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700 border-l-4 border-l-cyan-500 p-6 rounded-2xl shadow-sm transition-colors">
+                    <h3 class="font-bold text-cyan-600 dark:text-cyan-400 mb-2 flex items-center gap-2">🤖 AI Analysis: {{ selected }}</h3>
+                    <h2 class="text-3xl font-bold mb-4">{{ ai.status }}</h2>
+                    <div class="w-full bg-slate-200 dark:bg-slate-900 rounded-full h-4 mb-2 flex overflow-hidden border border-slate-300 dark:border-slate-700">
                         <div class="bg-emerald-500 h-4" style="width: {{ ai.buy }}%"></div>
                         <div class="bg-rose-500 h-4" style="width: {{ ai.sell }}%"></div>
                     </div>
-                    <div class="flex justify-between text-xs font-medium text-slate-400">
-                        <span class="text-emerald-400">น้ำหนักซื้อ {{ ai.buy }}%</span>
-                        <span class="text-rose-400">น้ำหนักขาย {{ ai.sell }}%</span>
+                    <div class="flex justify-between text-xs font-medium text-slate-600 dark:text-slate-400">
+                        <span class="text-emerald-600 dark:text-emerald-400">น้ำหนักซื้อ {{ ai.buy }}%</span>
+                        <span class="text-rose-600 dark:text-rose-400">น้ำหนักขาย {{ ai.sell }}%</span>
                     </div>
                 </div>
                 {% endif %}
             </div>
 
-            <!-- ฝั่งขวา (กราฟ + ข่าว + ประวัติ) -->
+            <!-- ฝั่งขวา (กราฟ + ข่าว + รายการ) -->
             <div class="lg:col-span-8 space-y-6 flex flex-col">
                 
-                <!-- กราฟใหญ่ TradingView -->
-                <div class="card p-1 overflow-hidden flex-1 min-h-[500px]">
+                <!-- กล่องกราฟ -->
+                <div class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700 p-1 rounded-2xl shadow-sm overflow-hidden flex-1 min-h-[500px] transition-colors">
                     {% if selected %}
-                    <div class="tradingview-widget-container w-full h-[550px]">
-                      <div id="tradingview_{{ selected }}" class="h-full"></div>
-                      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-                      <script type="text/javascript">
-                      new TradingView.widget({
-                        "autosize": true,
-                        "symbol": "{{ selected }}",
-                        "interval": "D",
-                        "timezone": "Asia/Bangkok",
-                        "theme": "dark", /* ปรับเป็นธีมมืด */
-                        "style": "1",
-                        "locale": "th_TH",
-                        "enable_publishing": false,
-                        "backgroundColor": "#1e293b", /* สีพื้นหลังกลืนกับ Card */
-                        "gridColor": "#334155",
-                        "hide_top_toolbar": false,
-                        "hide_legend": false,
-                        "save_image": false,
-                        "container_id": "tradingview_{{ selected }}"
-                      });
-                      </script>
+                    <div class="tradingview-widget-container w-full h-[550px]" id="tv_chart_container">
+                      <!-- กราฟจะถูกโหลดโดย Javascript เพื่อให้เปลี่ยนสีตามธีมได้ -->
                     </div>
                     {% else %}
-                    <div class="flex flex-col items-center justify-center h-[550px] text-slate-500">
+                    <div class="flex flex-col items-center justify-center h-[550px] text-slate-400 dark:text-slate-500">
                         <span class="text-6xl mb-4">📈</span>
-                        <p class="text-xl font-medium text-slate-400">ยังไม่ได้เลือกหุ้น</p>
+                        <p class="text-xl font-medium">ยังไม่ได้เลือกหุ้น</p>
                         <p class="text-sm mt-2">โปรดค้นหาชื่อหุ้นที่เมนูด้านซ้ายเพื่อดูกราฟราคา</p>
                     </div>
                     {% endif %}
                 </div>
 
-                <!-- ด้านล่างแบ่ง 2 ฝั่ง (ข่าว / รายการ) -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- News -->
-                    <div class="card p-6 h-64 overflow-y-auto">
-                        <h3 class="font-bold mb-4 text-cyan-400 flex items-center gap-2">📰 ข่าวสารล่าสุด: {{ selected if selected else '-' }}</h3>
+                    <!-- ส่วนข่าวสาร -->
+                    <div id="news-section" class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700 p-6 rounded-2xl shadow-sm h-72 overflow-y-auto transition-colors">
+                        <h3 class="font-bold mb-4 text-cyan-600 dark:text-cyan-400 flex items-center gap-2">📰 ข่าวสารล่าสุด: {{ selected if selected else '-' }}</h3>
                         {% if selected and news %}
                         <ul class="space-y-4">
                             {% for n in news %}
-                            <li class="border-b border-slate-700 pb-3 last:border-0">
-                                <a href="{{ n.link }}" target="_blank" class="text-slate-200 hover:text-cyan-400 font-medium text-sm block mb-2 transition-colors line-clamp-2">{{ n.title }}</a>
-                                <span class="text-xs text-slate-400 bg-slate-900 px-2 py-1 rounded border border-slate-700">{{ n.publisher }}</span>
+                            <li class="border-b border-slate-100 dark:border-slate-700 pb-3 last:border-0">
+                                <a href="{{ n.link }}" target="_blank" class="text-slate-700 dark:text-slate-200 hover:text-cyan-600 dark:hover:text-cyan-400 font-medium text-sm block mb-2 transition-colors line-clamp-2">{{ n.title }}</a>
+                                <span class="text-[11px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded border border-slate-200 dark:border-slate-700">{{ n.publisher }}</span>
                             </li>
                             {% endfor %}
                         </ul>
                         {% else %}
-                        <p class="text-sm text-slate-500 text-center py-8">ไม่มีข่าวใหม่ หรือยังไม่ได้เลือกหุ้น</p>
+                        <div class="h-full flex items-center justify-center -mt-8">
+                            <p class="text-sm text-slate-400 dark:text-slate-500">ไม่มีข่าวใหม่ หรือยังไม่ได้เลือกหุ้น</p>
+                        </div>
                         {% endif %}
                     </div>
 
-                    <!-- Alerts List (ส่วนตัว) -->
-                    <div class="card p-6 h-64 flex flex-col">
+                    <!-- ส่วนรายการแจ้งเตือน -->
+                    <div id="alerts-section" class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700 p-6 rounded-2xl shadow-sm h-72 flex flex-col transition-colors">
                         <div class="flex justify-between items-center mb-4">
-                            <h3 class="font-bold text-cyan-400 flex items-center gap-2">🔔 รายการแจ้งเตือนของคุณ</h3>
-                            <span class="bg-cyan-900/50 text-cyan-400 text-xs px-2 py-1 rounded-full border border-cyan-800">{{ alerts|length }}</span>
+                            <h3 class="font-bold text-cyan-600 dark:text-cyan-400 flex items-center gap-2">🔔 รายการแจ้งเตือน</h3>
+                            <span class="bg-cyan-100 dark:bg-cyan-900/50 text-cyan-700 dark:text-cyan-400 text-xs px-2 py-1 rounded-full border border-cyan-200 dark:border-cyan-800">{{ alerts|length }}</span>
                         </div>
                         <div class="overflow-y-auto pr-2 space-y-3 flex-1">
                             {% if alerts %}
                                 {% for alert in alerts %}
-                                <div class="bg-slate-900/50 border border-slate-700 p-3 rounded-lg flex justify-between items-center hover:border-slate-600 transition-colors">
+                                <div class="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 p-3 rounded-lg flex justify-between items-center hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
                                     <div>
-                                        <div class="font-bold text-white mb-1">
+                                        <div class="font-bold text-slate-800 dark:text-white mb-1">
                                             {{ alert.symbol }} 
                                             {% if alert.alerted %}
-                                            <span class="text-[10px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded ml-1">แจ้งเตือนแล้ว</span>
+                                            <span class="text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded ml-1">แจ้งเตือนแล้ว</span>
                                             {% else %}
-                                            <span class="text-[10px] bg-emerald-900/40 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded ml-1">กำลังเฝ้าดู</span>
+                                            <span class="text-[10px] bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30 px-2 py-0.5 rounded ml-1">กำลังเฝ้าดู</span>
                                             {% endif %}
                                         </div>
-                                        <div class="text-xs text-slate-400">
-                                            รับ: <span class="text-emerald-400">{{ alert.buy if alert.buy else '-' }}</span> | 
-                                            ต้าน: <span class="text-rose-400">{{ alert.sell if alert.sell else '-' }}</span>
+                                        <div class="text-xs text-slate-500 dark:text-slate-400">
+                                            รับ: <span class="text-emerald-600 dark:text-emerald-400">{{ alert.buy if alert.buy else '-' }}</span> | 
+                                            ต้าน: <span class="text-rose-600 dark:text-rose-400">{{ alert.sell if alert.sell else '-' }}</span>
                                         </div>
                                     </div>
                                     <form action="/delete/{{ alert.symbol }}/{{ alert.buy }}/{{ alert.sell }}" method="POST">
-                                        <button type="submit" class="text-rose-400 hover:text-rose-300 hover:bg-rose-900/20 p-2 rounded transition-colors" title="ลบ">
+                                        <button type="submit" class="text-rose-500 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/20 p-2 rounded transition-colors" title="ลบ">
                                             🗑️
                                         </button>
                                     </form>
                                 </div>
                                 {% endfor %}
                             {% else %}
-                                <div class="h-full flex items-center justify-center border-2 border-dashed border-slate-700 rounded-lg">
-                                    <p class="text-sm text-slate-500">ไม่มีรายการแจ้งเตือน</p>
+                                <div class="h-full flex items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-lg">
+                                    <p class="text-sm text-slate-400 dark:text-slate-500">ไม่มีรายการแจ้งเตือน</p>
                                 </div>
                             {% endif %}
                         </div>
@@ -235,9 +230,66 @@
         </div>
     </div>
 
-    {% if selected %}
-    <!-- Script ดึงราคา -->
+    <!-- Script สำหรับจัดธีมและโหลดกราฟ TradingView -->
+    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
     <script>
+        // ระบบจำธีม สว่าง/มืด
+        function applyTheme(theme) {
+            const html = document.documentElement;
+            const themeIcon = document.getElementById('theme-icon');
+            const themeText = document.getElementById('theme-text');
+            
+            if (theme === 'dark') {
+                html.classList.add('dark');
+                if(themeIcon) { themeIcon.innerText = '☀️'; themeText.innerText = 'เปิดโหมดสว่าง (Light)'; }
+            } else {
+                html.classList.remove('dark');
+                if(themeIcon) { themeIcon.innerText = '🌙'; themeText.innerText = 'เปิดโหมดมืด (Dark)'; }
+            }
+            
+            // โหลดกราฟใหม่ให้สีตรงกับธีม (ถ้ามีการเลือกหุ้นไว้)
+            {% if selected %}
+            renderTradingViewChart(theme);
+            {% endif %}
+        }
+
+        function toggleTheme() {
+            const currentTheme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            localStorage.setItem('theme', newTheme);
+            applyTheme(newTheme);
+        }
+
+        // อ่านค่าธีมตอนเปิดเว็บ
+        const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        applyTheme(savedTheme);
+
+        // ฟังก์ชันโหลดกราฟ
+        function renderTradingViewChart(theme) {
+            const container = document.getElementById('tv_chart_container');
+            if(container) {
+                container.innerHTML = `<div id="tradingview_{{ selected }}" class="h-full w-full"></div>`;
+                new TradingView.widget({
+                    "autosize": true,
+                    "symbol": "{{ selected }}",
+                    "interval": "D",
+                    "timezone": "Asia/Bangkok",
+                    "theme": theme, 
+                    "style": "1",
+                    "locale": "th_TH",
+                    "enable_publishing": false,
+                    "backgroundColor": theme === 'dark' ? "#1e293b" : "#ffffff", // สลับสีพื้นหลัง
+                    "gridColor": theme === 'dark' ? "#334155" : "#f1f5f9", // สลับสีเส้นตาราง
+                    "hide_top_toolbar": false,
+                    "hide_legend": false,
+                    "save_image": false,
+                    "container_id": "tradingview_{{ selected }}"
+                });
+            }
+        }
+
+        // ดึงราคาล่าสุด
+        {% if selected %}
         fetch('/get_price?symbol={{ selected }}')
             .then(response => response.json())
             .then(data => {
@@ -247,30 +299,29 @@
                         display.innerHTML = data.price;
                     } else {
                         display.innerHTML = 'ไม่พบข้อมูล';
-                        display.classList.replace('text-emerald-400', 'text-rose-400');
+                        display.classList.replace('text-emerald-700', 'text-rose-500');
+                        display.classList.replace('dark:text-emerald-400', 'dark:text-rose-400');
                     }
                 }
             });
-    </script>
-    {% endif %}
+        {% endif %}
 
-    <!-- Script สำหรับปุ่มทดสอบส่งอีเมล -->
-    <script>
-    function testSendEmail() {
-        alert('⏳ กำลังทดสอบส่งอีเมล... กรุณารอสักครู่');
-        fetch('/test_email', { method: 'POST' })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                alert('✅ ' + data.message);
-            } else {
-                alert('❌ ' + data.message);
-            }
-        })
-        .catch(error => {
-            alert('❌ เกิดข้อผิดพลาดในการเชื่อมต่อ');
-        });
-    }
+        // ปุ่มทดสอบส่งเมล
+        function testSendEmail() {
+            alert('⏳ กำลังทดสอบส่งอีเมล... กรุณารอสักครู่');
+            fetch('/test_email', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('✅ ' + data.message);
+                } else {
+                    alert('❌ ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('❌ เกิดข้อผิดพลาดในการเชื่อมต่อ');
+            });
+        }
     </script>
 </body>
 </html>
